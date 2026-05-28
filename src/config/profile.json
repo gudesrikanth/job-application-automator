@@ -1,0 +1,39 @@
+{
+  "personal": {
+    "firstName": "Srikanth",
+    "lastName": "Gude",
+    "fullName": "Srikanth Gude",
+    "email": "srikanth.gude4@gmail.com",
+    "phone": "816-223-7776",
+    "city": "Denton",
+    "state": "TX",
+    "zip": "76201",
+    "country": "United States",
+    "linkedIn": "https://linkedin.com/in/gudesrikanth",
+    "github": "https://github.com/gudesrikanth",
+    "portfolio": "https://gudesrikanth.github.io/srikanth-portfolio"
+  },
+  "work": {
+    "visaStatus": "H-1B",
+    "workAuthorization": "H-1B visa, authorized to work in the US, sponsorship may be required in future",
+    "requiresSponsorship": true,
+    "noticePeriod": "2 weeks",
+    "willingToRelocate": true,
+    "relocationNote": "Yes, open to relocate within the United States",
+    "salaryMin": 120000,
+    "salaryMax": 160000,
+    "salaryExpectation": "$120,000 - $160,000",
+    "salaryFlexible": true,
+    "employmentType": "Full-time",
+    "remotePreference": "Remote or Hybrid"
+  },
+  "education": {
+    "degree": "Bachelor of Technology",
+    "major": "Computer Science",
+    "university": "Jawaharlal Nehru Technological University",
+    "graduationYear": "2015",
+    "gpa": ""
+  },
+  "summary": "Senior Software Engineer with 6+ years building cloud-native systems, Kubernetes platforms, CI/CD automation, and Java/Python microservices across AWS, Azure, and GCP. Experienced in DevSecOps, Angular/React frontends, and large-scale distributed architectures.",
+  "yearsOfExperience": "6+"
+}
