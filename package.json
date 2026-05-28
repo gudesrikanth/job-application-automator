@@ -1,24 +1,27 @@
 {
   "name": "job-application-automator",
   "version": "1.0.0",
-  "description": "Modular Playwright job application automation with POM, ATS adapters, bot-bypass, and human-in-the-loop review",
+  "description": "Automated job search and application tool using Playwright. Searches LinkedIn, Indeed, and Glassdoor for jobs by title, then applies via Greenhouse, Lever, and Workday ATS adapters with human-in-the-loop review.",
   "main": "src/index.js",
-  "type": "module",
   "scripts": {
     "start": "node src/index.js",
     "apply": "node src/index.js",
     "test": "playwright test",
-    "report": "playwright show-report"
+    "test:search": "playwright test tests/functional/search.test.js",
+    "test:apply": "playwright test tests/functional/apply.test.js",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "report": "playwright show-report test-results/html-report",
+    "install:browsers": "playwright install chromium"
   },
   "dependencies": {
     "@playwright/test": "^1.43.0",
     "playwright": "^1.43.0",
-    "chalk": "^5.3.0",
-    "dotenv": "^16.4.5",
-    "readline": "^1.3.0"
+    "chalk": "^4.1.2",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
-    "eslint": "^9.0.0"
+    "eslint": "^8.57.0"
   },
   "engines": {
     "node": ">=18.0.0"
