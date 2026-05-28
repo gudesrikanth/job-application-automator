@@ -3,9 +3,11 @@
 // then apply using ATS adapters with human-in-the-loop review before submit.
 //
 // CLI flags:
-//   node src/index.js                   -> run both company + platform modes
-//   node src/index.js --companies-only  -> only search company career pages
-//   node src/index.js --platforms-only  -> only search LinkedIn/Indeed/Glassdoor
+//   node src/index.js                 -> run both company + platform modes
+//   node src/index.js --companies-only -> only search company career pages
+//   node src/index.js --platforms-only -> only search LinkedIn/Indeed/Glassdoor
+
+'use strict';
 
 const { chromium } = require('playwright');
 const path = require('path');
@@ -23,190 +25,160 @@ const profile = require('./config/profile.json');
 const answers = require('./config/answers.json');
 const searchConfig = require('./config/searchConfig.json');
 
-// ─── Parse CLI args ────────────────────────────────────────────────────────
-
+// ── CLI args ────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 const companiesOnly = args.includes('--companies-only');
 const platformsOnly = args.includes('--platforms-only');
 
-const scraperOptions = {
-  companyMode:  !platformsOnly,   // on unless --platforms-only
-  platformMode: !companiesOnly    // on unless --companies-only
+// ── ATS adapter map ─────────────────────────────────────────────────────────
+const ATS_ADAPTERS = {
+  greenhouse: GreenhousePage,
+  lever: LeverPage,
+  workday: WorkdayPage,
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
-
-function detectATS(url) {
-  if (!url) return null;
-  const u = url.toLowerCase();
-  if (u.includes('greenhouse.io')) return 'greenhouse';
-  if (u.includes('lever.co'))      return 'lever';
-  if (u.includes('myworkdayjobs')) return 'workday';
-  return null;
-}
-
-async function humanPause(message) {
-  if (!searchConfig.behavior.pauseForReviewBeforeSubmit) return true;
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise(resolve => {
-    const timeout = searchConfig.behavior.reviewTimeoutSeconds || 120;
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(message);
-    console.log(`Type "submit" to confirm, "skip" to skip, or wait ${timeout}s to auto-skip.`);
-    console.log('='.repeat(60));
-    let answered = false;
-    const timer = setTimeout(() => {
-      if (!answered) { answered = true; rl.close(); console.log('[Auto-skip]'); resolve(false); }
-    }, timeout * 1000);
-    rl.question('> ', answer => {
-      if (!answered) {
-        answered = true; clearTimeout(timer); rl.close();
-        resolve(answer.trim().toLowerCase() === 'submit');
-      }
+// ── Human-in-the-loop helper ────────────────────────────────────────────────
+function prompt(question) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: false,
+  });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase());
     });
   });
 }
 
-async function applyToJob(page, job, applyUrl) {
-  const ats = detectATS(applyUrl);
-  if (!ats) {
-    console.log(`  [skip] Unsupported ATS for URL: ${applyUrl}`);
-    return { status: 'skipped', reason: 'unsupported_ats' };
+// ── Detect ATS from URL ──────────────────────────────────────────────────────
+function detectATS(url) {
+  if (!url) return null;
+  const u = url.toLowerCase();
+  if (u.includes('greenhouse.io') || u.includes('boards.greenhouse')) return 'greenhouse';
+  if (u.includes('lever.co') || u.includes('jobs.lever')) return 'lever';
+  if (u.includes('myworkdayjobs') || u.includes('workday')) return 'workday';
+  return null;
+};
+
+// ── Apply to a single job listing ────────────────────────────────────────────
+async function applyToJob(context, job) {
+  const atsKey = detectATS(job.applyUrl || job.url);
+  const AdapterClass = atsKey ? ATS_ADAPTERS[atsKey] : null;
+
+  if (!AdapterClass) {
+    Logger.warn(`[apply] No ATS adapter for: ${job.applyUrl || job.url}`);
+    return { status: 'skipped', reason: 'no-adapter' };
   }
 
-  const resumeInfo = resumeSelector.select(job);
-  const resumePath = path.resolve(resumeInfo.pdf);
-  if (!fs.existsSync(resumePath)) {
-    console.warn(`  [warn] Resume PDF not found: ${resumePath}`);
-  }
+  const resume = resumeSelector.select(job, searchConfig.tracks);
+  const page = await context.newPage();
 
-  console.log(`  [${ats.toUpperCase()}] ${job.title} @ ${job.company}`);
-  console.log(`  Source: ${job.source} | Resume: ${resumeInfo.track}`);
-  console.log(`  URL: ${applyUrl}`);
-
-  let atsPage;
   try {
-    if (ats === 'greenhouse') atsPage = new GreenhousePage(page, profile, answers, resumePath);
-    else if (ats === 'lever')  atsPage = new LeverPage(page, profile, answers, resumePath);
-    else if (ats === 'workday') atsPage = new WorkdayPage(page, profile, answers, resumePath);
+    const adapter = new AdapterClass(page, profile, answers, resume);
+    await adapter.navigate(job.applyUrl || job.url);
+    await adapter.fillForm();
 
-    await atsPage.navigate(applyUrl);
-    await atsPage.fillForm();
+    // ── Human-in-the-loop review pause ───────────────────────────────────
+    console.log('\n' + '═'.repeat(60));
+    console.log(`[REVIEW] Job: ${job.title} @ ${job.company}`);
+    console.log(`[REVIEW] URL: ${job.applyUrl || job.url}`);
+    console.log('[REVIEW] Form is filled. Type "submit" to submit, or Enter to skip.');
+    const answer = await prompt('> ');
 
-    const confirmed = await humanPause(
-      `Ready to submit:\n  ${job.title} at ${job.company}\n  URL: ${applyUrl}`
-    );
-    if (!confirmed) { console.log('  [skipped by user]'); return { status: 'skipped', reason: 'user_skip' }; }
-
-    await atsPage.submit();
-    Logger.logSuccess(job);
-    console.log(`  [SUCCESS] Applied to ${job.title} @ ${job.company}`);
-    return { status: 'applied' };
-
-  } catch (err) {
-    console.error(`  [FAILED] ${job.title} @ ${job.company}: ${err.message}`);
-    if (searchConfig.behavior.screenshotOnFailure) {
-      const ssDir = path.resolve('logs/screenshots');
-      if (!fs.existsSync(ssDir)) fs.mkdirSync(ssDir, { recursive: true });
-      const ssFile = path.join(ssDir, `failure-${Date.now()}.png`);
-      await page.screenshot({ path: ssFile, fullPage: true }).catch(() => {});
-      console.log(`  Screenshot: ${ssFile}`);
+    if (answer === 'submit') {
+      await adapter.submit();
+      Logger.log(`[apply] Submitted: ${job.title} @ ${job.company}`);
+      return { status: 'submitted' };
+    } else {
+      Logger.log(`[apply] Skipped by user: ${job.title} @ ${job.company}`);
+      return { status: 'skipped', reason: 'user-skip' };
     }
-    Logger.logFailure(job, err);
-    return { status: 'failed', error: err.message };
+  } catch (err) {
+    Logger.error(`[apply] Error applying to ${job.title}: ${err.message}`);
+    await page.screenshot({
+      path: `test-results/error-${Date.now()}.png`,
+      fullPage: true,
+    }).catch(() => {});
+    return { status: 'error', reason: err.message };
+  } finally {
+    await page.close();
   }
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
-(async () => {
-  const mode = companiesOnly ? 'COMPANIES ONLY'
-             : platformsOnly ? 'PLATFORMS ONLY'
-             : 'FULL (Companies + Platforms)';
-
-  console.log('\n Job Application Automator');
-  console.log(`Mode: ${mode}`);
-  console.log('='.repeat(60));
-
+// ── Main ─────────────────────────────────────────────────────────────────────
+async function main() {
   const browser = await chromium.launch({
-    headless: false, slowMo: 50,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    headless: searchConfig.behavior.headless,
+    slowMo: searchConfig.behavior.slowMo || 50,
   });
+
   const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    viewport: { width: 1280, height: 900 }
+    viewport: { width: 1280, height: 800 },
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+      '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   });
-  const page = await context.newPage();
 
-  // PHASE 1: Discover jobs
-  console.log('\n[Phase 1] Discovering jobs...');
-  const scraper = new JobScraper(page, scraperOptions);
-  let jobs = [];
+  // Ensure output dirs exist
+  fs.mkdirSync('test-results', { recursive: true });
+  fs.mkdirSync('logs', { recursive: true });
+
   try {
-    jobs = await scraper.discoverJobs();
+    const scraper = new JobScraper(context, searchConfig);
+    let jobs = [];
+
+    if (!platformsOnly) {
+      console.log('\n[main] === Phase 1: Company career-page discovery ===');
+      const companyJobs = await scraper.runCompanyMode();
+      jobs = jobs.concat(companyJobs);
+      console.log(`[main] Found ${companyJobs.length} jobs from company pages.`);
+    }
+
+    if (!companiesOnly) {
+      console.log('\n[main] === Phase 2: Public platform discovery ===');
+      const platformJobs = await scraper.runPlatformMode();
+      jobs = jobs.concat(platformJobs);
+      console.log(`[main] Found ${platformJobs.length} jobs from platforms.`);
+    }
+
+    // Deduplicate by URL
+    const seen = new Set();
+    const uniqueJobs = jobs.filter((j) => {
+      const key = j.applyUrl || j.url || `${j.title}|${j.company}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    console.log(`\n[main] Total unique jobs to process: ${uniqueJobs.length}`);
+
+    // Apply
+    const results = { submitted: 0, skipped: 0, error: 0 };
+    for (const job of uniqueJobs) {
+      const result = await applyToJob(context, job);
+      results[result.status] = (results[result.status] || 0) + 1;
+    }
+
+    console.log('\n[main] === Run Complete ===');
+    console.log(`  Submitted : ${results.submitted}`);
+    console.log(`  Skipped   : ${results.skipped}`);
+    console.log(`  Errors    : ${results.error}`);
+
+    // Write summary log
+    const summary = { timestamp: new Date().toISOString(), jobs: uniqueJobs, results };
+    fs.writeFileSync(
+      `logs/run-${Date.now()}.json`,
+      JSON.stringify(summary, null, 2)
+    );
   } catch (err) {
-    console.error('[ERROR] Job discovery failed:', err.message);
-  }
-
-  if (jobs.length === 0) {
-    console.log('[INFO] No new jobs found. Exiting.');
+    console.error('[main] Fatal error:', err.message);
+    process.exit(1);
+  } finally {
+    await context.close();
     await browser.close();
-    return;
   }
+}
 
-  const maxJobs = searchConfig.behavior.maxJobsPerRun || 50;
-  if (jobs.length > maxJobs) {
-    console.log(`[INFO] Capping to ${maxJobs} of ${jobs.length} jobs`);
-    jobs = jobs.slice(0, maxJobs);
-  }
-  console.log(`\n[Phase 1 Complete] ${jobs.length} jobs to process.`);
-
-  // PHASE 2: Apply to each job
-  console.log('\n[Phase 2] Applying...');
-  const stats = { applied: 0, skipped: 0, failed: 0, unsupported: 0 };
-
-  for (let i = 0; i < jobs.length; i++) {
-    const job = jobs[i];
-    console.log(`\n[${i + 1}/${jobs.length}] ${job.title} @ ${job.company} [${job.source}]`);
-    if (job.location) console.log(`  Location: ${job.location}`);
-
-    let applyUrl = null;
-    try {
-      applyUrl = await scraper.extractApplyUrl(job);
-    } catch (err) {
-      console.warn(`  [warn] Could not extract apply URL: ${err.message}`);
-    }
-
-    if (!applyUrl) {
-      console.log('  [skip] No supported ATS apply URL found');
-      stats.skipped++;
-      continue;
-    }
-
-    const result = await applyToJob(page, job, applyUrl);
-    if (result.status === 'applied') {
-      stats.applied++;
-      scraper.markApplied(job.url);
-    } else if (result.status === 'skipped') {
-      result.reason === 'unsupported_ats' ? stats.unsupported++ : stats.skipped++;
-    } else {
-      stats.failed++;
-    }
-
-    await new Promise(r => setTimeout(r, 3000 + Math.random() * 3000));
-  }
-
-  // Summary
-  console.log('\n' + '='.repeat(60));
-  console.log(' Run Summary');
-  console.log('='.repeat(60));
-  console.log(`  Mode:        ${mode}`);
-  console.log(`  Applied:     ${stats.applied}`);
-  console.log(`  Skipped:     ${stats.skipped}`);
-  console.log(`  Unsupported: ${stats.unsupported}`);
-  console.log(`  Failed:      ${stats.failed}`);
-  console.log(`  Total:       ${jobs.length}`);
-  console.log('='.repeat(60));
-
-  await browser.close();
-})();
+main();
