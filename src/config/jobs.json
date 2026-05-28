@@ -1,0 +1,38 @@
+[
+  {
+    "id": "job-001",
+    "title": "Senior Software Engineer",
+    "company": "Example Corp",
+    "url": "https://boards.greenhouse.io/example/jobs/12345",
+    "ats": "greenhouse",
+    "track": "backend-java",
+    "location": "Austin, TX",
+    "remote": true,
+    "status": "pending",
+    "notes": "Strong Java/Spring Boot role, K8s preferred"
+  },
+  {
+    "id": "job-002",
+    "title": "Cloud Engineer",
+    "company": "Tech Solutions Inc",
+    "url": "https://jobs.lever.co/techsolutions/abcde",
+    "ats": "lever",
+    "track": "platform-cloud",
+    "location": "Remote",
+    "remote": true,
+    "status": "pending",
+    "notes": "Terraform, AWS, Kubernetes platform role"
+  },
+  {
+    "id": "job-003",
+    "title": "Full Stack Developer",
+    "company": "Digital Agency LLC",
+    "url": "https://example.wd5.myworkdayjobs.com/careers/job/Remote/Full-Stack_R12345",
+    "ats": "workday",
+    "track": "angular-fullstack",
+    "location": "Dallas, TX",
+    "remote": false,
+    "status": "pending",
+    "notes": "Angular 19+, NgRx, Java backend"
+  }
+]
