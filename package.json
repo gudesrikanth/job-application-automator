@@ -1,12 +1,14 @@
 {
   "name": "job-application-automator",
-  "version": "1.0.0",
-  "description": "Automated job search and application tool using Playwright. Searches LinkedIn, Indeed, and Glassdoor for jobs by title, then applies via Greenhouse, Lever, and Workday ATS adapters with human-in-the-loop review.",
+  "version": "2.0.0",
+  "description": "Automated job search and application tool. Searches company career pages directly AND public platforms (LinkedIn, Indeed, Glassdoor). Applies via Greenhouse, Lever, and Workday ATS with human-in-the-loop review.",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "apply": "node src/index.js",
+    "start:companies": "node src/index.js --companies-only",
+    "start:platforms": "node src/index.js --platforms-only",
     "test": "playwright test",
+    "test:company": "playwright test tests/functional/company.test.js",
     "test:search": "playwright test tests/functional/search.test.js",
     "test:apply": "playwright test tests/functional/apply.test.js",
     "test:headed": "playwright test --headed",
