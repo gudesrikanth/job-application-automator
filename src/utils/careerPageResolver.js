@@ -1,128 +1,127 @@
 // src/utils/careerPageResolver.js
-// Auto-discovers a company's careers page URL when one isn't explicitly configured.
-// Strategy: try common career URL patterns, then fall back to a web search.
+// Auto-discovers a company's careers page URL when one isn't explicitly provided.
+// Strategies (in order):
+//   1. Try common URL path patterns on the company domain
+//   2. Follow the company homepage and look for a careers/jobs link
+// Exports:
+//   resolve(company) -> string|null  (careersUrl or null)
+//   enrich(companies, context) -> enriched companies array
 
-const https = require('https');
-const http = require('http');
+'use strict';
 
-// Common career page URL patterns to try for a given domain
-const CAREER_PATH_PATTERNS = [
-  'careers',
-  'jobs',
-  'career',
-  'work-with-us',
-  'join-us',
-  'join-our-team',
-  'opportunities',
-  'open-positions'
+const CAREER_PATHS = [
+  '/careers',
+  '/jobs',
+  '/career',
+  '/work-with-us',
+  '/join-us',
+  '/join-our-team',
+  '/opportunities',
+  '/open-positions',
+  '/about/careers',
 ];
 
-// Common career subdomain patterns
-const CAREER_SUBDOMAIN_PATTERNS = [
-  'careers',
-  'jobs',
-  'career',
-  'hire',
-  'apply'
+const CAREER_LINK_PATTERNS = [
+  /careers/i,
+  /jobs/i,
+  /join.us/i,
+  /work.with.us/i,
+  /opportunities/i,
+  /open.positions/i,
 ];
 
 /**
- * Given a company name or domain, attempt to resolve the careers page URL.
- * @param {string} companyName  - e.g. "Stripe" or "stripe.com"
- * @param {object} page         - Playwright page (used for browser-based resolution)
- * @returns {Promise<string|null>} - resolved careers URL or null
+ * Probe common URL paths on the company domain.
+ * Returns the first URL that responds with 200, or null.
+ * @param {object} context  - Playwright BrowserContext
+ * @param {string} domain   - e.g. "stripe.com"
  */
-async function resolveCareerUrl(companyName, page) {
-  // 1. Derive a base domain guess from the company name
-  const domain = companyName.includes('.')
-    ? companyName
-    : `${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
-
-  // 2. Try common subdomains first (careers.company.com)
-  for (const sub of CAREER_SUBDOMAIN_PATTERNS) {
-    const url = `https://${sub}.${domain}`;
-    if (await _urlReachable(url)) {
-      console.log(`[careerPageResolver] Found via subdomain: ${url}`);
-      return url;
-    }
-  }
-
-  // 3. Try common paths on the main domain (company.com/careers)
-  for (const pathSuffix of CAREER_PATH_PATTERNS) {
-    const url = `https://www.${domain}/${pathSuffix}`;
-    if (await _urlReachable(url)) {
-      console.log(`[careerPageResolver] Found via path: ${url}`);
-      return url;
-    }
-  }
-
-  // 4. Fallback: use the browser to do a DuckDuckGo search and grab the first result
-  if (page) {
-    const searchResult = await _browserSearch(page, `${companyName} careers jobs site`);
-    if (searchResult) {
-      console.log(`[careerPageResolver] Found via browser search: ${searchResult}`);
-      return searchResult;
-    }
-  }
-
-  console.warn(`[careerPageResolver] Could not resolve career page for: ${companyName}`);
-  return null;
-}
-
-/**
- * Quick HTTP HEAD check to see if a URL is reachable (returns 200-399).
- */
-function _urlReachable(url) {
-  return new Promise(resolve => {
-    const lib = url.startsWith('https') ? https : http;
-    const req = lib.request(url, { method: 'HEAD', timeout: 5000 }, res => {
-      resolve(res.statusCode >= 200 && res.statusCode < 400);
-    });
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
-    req.end();
-  });
-}
-
-/**
- * Use the Playwright browser to search DuckDuckGo and return the first result URL.
- */
-async function _browserSearch(page, query) {
+async function probeCommonPaths(context, domain) {
+  const base = domain.startsWith('http') ? domain : `https://${domain}`;
+  const page = await context.newPage();
   try {
-    const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}&ia=web`;
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await page.waitForTimeout(2000);
-    // Grab first organic result link
-    const firstResult = await page.locator('a[data-testid="result-title-a"]').first();
-    if (await firstResult.count() > 0) {
-      const href = await firstResult.getAttribute('href');
-      if (href && href.startsWith('http')) return href;
+    for (const p of CAREER_PATHS) {
+      const url = base.replace(/\/$/, '') + p;
+      try {
+        const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 });
+        if (resp && resp.status() < 400) {
+          console.log(`[resolver] Found careers URL via path probe: ${url}`);
+          return url;
+        }
+      } catch (_) {}
     }
-  } catch (_) {}
+  } finally {
+    await page.close();
+  }
   return null;
 }
 
 /**
- * Enrich a companies array: fill in missing careersUrl via resolution.
- * @param {Array}  companies - from companies.json
- * @param {object} page      - Playwright page
- * @returns {Promise<Array>}
+ * Visit the company homepage and look for a link that contains careers/jobs text.
+ * @param {object} context  - Playwright BrowserContext
+ * @param {string} domain   - e.g. "stripe.com"
  */
-async function enrichCompanies(companies, page) {
-  const enriched = [];
-  for (const company of companies) {
-    if (!company.enabled) continue;
-    if (!company.careersUrl) {
-      console.log(`[careerPageResolver] Resolving career URL for: ${company.name}`);
-      company.careersUrl = await resolveCareerUrl(company.name, page);
+async function followHomepageLink(context, domain) {
+  const base = domain.startsWith('http') ? domain : `https://${domain}`;
+  const page = await context.newPage();
+  try {
+    await page.goto(base, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    const links = await page.$$eval('a[href]', (els) =>
+      els.map((el) => ({ href: el.href, text: el.textContent.trim() }))
+    );
+    for (const { href, text } of links) {
+      for (const pattern of CAREER_LINK_PATTERNS) {
+        if (pattern.test(text) || pattern.test(href)) {
+          console.log(`[resolver] Found careers link on homepage: ${href}`);
+          return href;
+        }
+      }
     }
-    if (company.careersUrl) {
-      enriched.push(company);
-    } else {
-      console.warn(`[careerPageResolver] Skipping ${company.name} - no career URL found`);
-    }
+  } catch (err) {
+    console.warn(`[resolver] Could not load homepage ${base}: ${err.message}`);
+  } finally {
+    await page.close();
   }
-  return enriched;
+  return null;
 }
 
-module.exports = { resolveCareerUrl, enrichCompanies };
+/**
+ * Resolve the careers URL for a single company entry.
+ * @param {object} company  - { name, domain, careersUrl?, ... }
+ * @param {object} context  - Playwright BrowserContext
+ * @returns {string|null}
+ */
+async function resolve(company, context) {
+  if (company.careersUrl) return company.careersUrl; // already known
+  if (!company.domain) return null;
+
+  // Try common URL paths first (faster)
+  const byPath = await probeCommonPaths(context, company.domain);
+  if (byPath) return byPath;
+
+  // Fall back to homepage link discovery
+  const byLink = await followHomepageLink(context, company.domain);
+  return byLink;
+}
+
+/**
+ * Enrich an array of company configs by resolving any missing careersUrl.
+ * @param {object[]} companies  - Array of company config objects
+ * @param {object}   context    - Playwright BrowserContext
+ * @returns {object[]}          - Companies with careersUrl populated where possible
+ */
+async function enrich(companies, context) {
+  const result = [];
+  for (const company of companies) {
+    if (!company.careersUrl && company.domain) {
+      console.log(`[resolver] Resolving careers URL for ${company.name}...`);
+      const url = await resolve(company, context);
+      result.push({ ...company, careersUrl: url || company.careersUrl || null });
+    } else {
+      result.push(company);
+    }
+  }
+  return result;
+}
+
+module.exports = { resolve, enrich, probeCommonPaths, followHomepageLink };
