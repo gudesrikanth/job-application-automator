@@ -1,0 +1,74 @@
+{
+  "jobTitles": [
+    "Software Engineer",
+    "Senior Software Engineer",
+    "DevOps Engineer",
+    "Infrastructure Engineer",
+    "Cloud Engineer",
+    "Software Developer",
+    "Senior Software Developer",
+    "Java Developer",
+    "Full Stack Developer"
+  ],
+  "locations": [
+    "Remote",
+    "Denton, TX",
+    "Dallas, TX",
+    "Austin, TX",
+    "United States"
+  ],
+  "keywords": [
+    "Java",
+    "Python",
+    "Kubernetes",
+    "Cloud",
+    "Spring Boot",
+    "Angular",
+    "React",
+    "Terraform",
+    "AWS",
+    "Azure",
+    "CI/CD",
+    "Microservices"
+  ],
+  "excludeKeywords": [
+    "clearance required",
+    "security clearance",
+    "US citizen only",
+    "no sponsorship",
+    "no visa",
+    "citizens only"
+  ],
+  "filters": {
+    "experienceLevel": ["mid-level", "senior"],
+    "jobType": "full-time",
+    "remote": true,
+    "postedWithinDays": 7,
+    "maxJobsPerTitle": 10,
+    "maxTotalJobs": 50
+  },
+  "platforms": [
+    {
+      "name": "linkedin",
+      "enabled": true,
+      "baseUrl": "https://www.linkedin.com/jobs/search",
+      "requiresLogin": true
+    },
+    {
+      "name": "indeed",
+      "enabled": true,
+      "baseUrl": "https://www.indeed.com/jobs",
+      "requiresLogin": false
+    },
+    {
+      "name": "glassdoor",
+      "enabled": true,
+      "baseUrl": "https://www.glassdoor.com/Job/jobs.htm",
+      "requiresLogin": false
+    }
+  ],
+  "deduplication": {
+    "enabled": true,
+    "cacheFile": "./data/applied-jobs.json"
+  }
+}
