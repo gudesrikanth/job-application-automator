@@ -1,170 +1,122 @@
 // src/scrapers/JobScraper.js
-// Master orchestrator: searches all enabled platforms AND company career pages,
-// returns a deduplicated job list ready for the apply pipeline.
+// Master orchestrator: coordinates company career-page scraping (CompanyScraper)
+// and public platform scraping (LinkedIn, Indeed, Glassdoor).
+// Returns a deduplicated job array for the apply pipeline.
 
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const CompanyScraper = require('./CompanyScraper');
 const LinkedInScraper = require('./platforms/LinkedInScraper');
 const IndeedScraper = require('./platforms/IndeedScraper');
 const GlassdoorScraper = require('./platforms/GlassdoorScraper');
-const CompanyScraper = require('./CompanyScraper');
-const { enrichCompanies } = require('../utils/careerPageResolver');
-const searchConfig = require('../config/searchConfig.json');
-const companiesConfig = require('../config/companies.json');
-const fs = require('fs');
-const path = require('path');
+const { enrich } = require('../utils/careerPageResolver');
 
-const APPLIED_CACHE_FILE = path.join(__dirname, '../../logs/applied-cache.json');
+const CACHE_FILE = path.join(__dirname, '../../logs/applied-cache.json');
+
+function loadCache() {
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      return new Set(JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')));
+    }
+  } catch (_) {}
+  return new Set();
+}
+
+function saveCache(cache) {
+  fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+  fs.writeFileSync(CACHE_FILE, JSON.stringify([...cache], null, 2));
+}
 
 class JobScraper {
   /**
-   * @param {object} page        - Playwright page
-   * @param {object} options
-   * @param {boolean} options.companyMode  - if true, search company career pages
-   * @param {boolean} options.platformMode - if true, search LinkedIn/Indeed/Glassdoor
+   * @param {object} context  - Playwright BrowserContext
+   * @param {object} config   - Parsed searchConfig.json
    */
-  constructor(page, options = {}) {
-    this.page = page;
-    this.options = {
-      companyMode: options.companyMode !== false,   // default ON
-      platformMode: options.platformMode !== false  // default ON
-    };
-
-    // Platform scrapers (LinkedIn, Indeed, Glassdoor)
-    this.platformScrapers = {};
-    if (this.options.platformMode) {
-      if (searchConfig.platforms.linkedin?.enabled) {
-        this.platformScrapers.linkedin = new LinkedInScraper(page);
-      }
-      if (searchConfig.platforms.indeed?.enabled) {
-        this.platformScrapers.indeed = new IndeedScraper(page);
-      }
-      if (searchConfig.platforms.glassdoor?.enabled) {
-        this.platformScrapers.glassdoor = new GlassdoorScraper(page);
-      }
-    }
-
-    // Company scraper (visits each company's own careers page)
-    this.companyScraper = this.options.companyMode ? new CompanyScraper(page) : null;
-
-    this.appliedCache = this._loadAppliedCache();
+  constructor(context, config) {
+    this.context = context;
+    this.config = config;
+    this.appliedCache = loadCache();
   }
 
-  // ─── Cache management ────────────────────────────────────────────────────
-
-  _loadAppliedCache() {
-    try {
-      if (fs.existsSync(APPLIED_CACHE_FILE)) {
-        return new Set(JSON.parse(fs.readFileSync(APPLIED_CACHE_FILE, 'utf8')));
-      }
-    } catch (e) {
-      console.warn('[JobScraper] Could not load applied cache:', e.message);
-    }
-    return new Set();
-  }
-
-  _saveAppliedCache() {
-    try {
-      const dir = path.dirname(APPLIED_CACHE_FILE);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(APPLIED_CACHE_FILE, JSON.stringify([...this.appliedCache], null, 2));
-    } catch (e) {
-      console.warn('[JobScraper] Could not save applied cache:', e.message);
-    }
-  }
-
-  markApplied(url) {
-    this.appliedCache.add(url);
-    this._saveAppliedCache();
-  }
-
-  // ─── Discovery ─────────────────────────────────────────────────────────────
-
-  /**
-   * Runs discovery across all enabled modes and returns deduplicated jobs.
-   */
-  async discoverJobs() {
-    const allJobs = [];
+  // ── Deduplicate and cache-filter a list of job objects ─────────────────────
+  _filterNew(jobs) {
     const seen = new Set();
+    return jobs.filter((job) => {
+      const key = job.applyUrl || job.url || `${job.title}|${job.company}`;
+      if (this.appliedCache.has(key)) return false;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
 
-    const add = (job) => {
-      if (!job.url) return;
-      if (this.appliedCache.has(job.url)) {
-        console.log(`  [skip - already applied] ${job.title} @ ${job.company}`);
-        return;
+  // ── Mark jobs as seen (call after successful apply) ──────────────────────
+  markApplied(job) {
+    const key = job.applyUrl || job.url || `${job.title}|${job.company}`;
+    this.appliedCache.add(key);
+    saveCache(this.appliedCache);
+  }
+
+  // ── Phase 1: Company career pages ──────────────────────────────────────
+  async runCompanyMode() {
+    const companiesConfig = require('../config/companies.json');
+    const titles = this.config.titles || [];
+
+    // Enrich companies that are missing a careersUrl
+    const companies = await enrich(companiesConfig, this.context);
+
+    const allJobs = [];
+    for (const company of companies) {
+      if (!company.enabled) continue;
+      if (!company.careersUrl) {
+        console.warn(`[JobScraper] No careersUrl for ${company.name} - skipping`);
+        continue;
       }
-      if (seen.has(job.url)) return;
-      seen.add(job.url);
-      allJobs.push(job);
-    };
-
-    // ─── MODE 1: Company career pages ─────────────────────────────────────────
-    if (this.options.companyMode && this.companyScraper) {
-      console.log('\n[JobScraper] Phase A: Searching company career pages...');
-      const { jobTitles } = searchConfig.search;
-
-      // Enrich companies: auto-discover careersUrl for any without one
-      const companies = await enrichCompanies(
-        companiesConfig.companies.filter(c => c.enabled !== false),
-        this.page
-      );
-
-      for (const company of companies) {
-        for (const title of jobTitles) {
-          const jobs = await this.companyScraper.search(company, title);
-          jobs.forEach(add);
-          await this._delay(1500 + Math.random() * 1500);
-        }
+      try {
+        const scraper = new CompanyScraper(this.context, company, titles);
+        const jobs = await scraper.scrape();
+        console.log(`[JobScraper] ${company.name}: found ${jobs.length} matching jobs`);
+        allJobs.push(...jobs);
+      } catch (err) {
+        console.error(`[JobScraper] Error scraping ${company.name}: ${err.message}`);
       }
-      console.log(`[JobScraper] Phase A complete. ${allJobs.length} jobs so far.`);
     }
 
-    // ─── MODE 2: Public platforms (LinkedIn, Indeed, Glassdoor) ─────────────────
-    if (this.options.platformMode && Object.keys(this.platformScrapers).length > 0) {
-      console.log('\n[JobScraper] Phase B: Searching public platforms...');
-      const { jobTitles, locations } = searchConfig.search;
-      const maxPages = searchConfig.search.maxPagesPerSearch || 2;
+    return this._filterNew(allJobs);
+  }
 
-      for (const title of jobTitles) {
-        for (const location of locations) {
-          for (const [platformName, scraper] of Object.entries(this.platformScrapers)) {
-            console.log(`  [${platformName}] "${title}" in "${location}"`);
-            try {
-              const jobs = await scraper.search(title, location, { maxPages });
-              jobs.forEach(add);
-            } catch (err) {
-              console.warn(`  [${platformName}] Error: ${err.message}`);
-            }
-            await this._delay(2000 + Math.random() * 2000);
+  // ── Phase 2: Public platforms ──────────────────────────────────────────
+  async runPlatformMode() {
+    const { titles, locations, platforms } = this.config;
+    const platformMap = {
+      linkedin: LinkedInScraper,
+      indeed: IndeedScraper,
+      glassdoor: GlassdoorScraper,
+    };
+
+    const enabledPlatforms = Object.entries(platformMap).filter(
+      ([key]) => !platforms || platforms[key] !== false
+    );
+
+    const allJobs = [];
+    for (const [key, ScraperClass] of enabledPlatforms) {
+      for (const title of titles) {
+        for (const location of (locations || ['Remote'])) {
+          try {
+            console.log(`[JobScraper] Searching ${key}: "${title}" in ${location}`);
+            const scraper = new ScraperClass(this.context, { title, location });
+            const jobs = await scraper.search();
+            allJobs.push(...jobs);
+          } catch (err) {
+            console.error(`[JobScraper] ${key} error for "${title}": ${err.message}`);
           }
         }
       }
-      console.log(`[JobScraper] Phase B complete. ${allJobs.length} total jobs.`);
     }
 
-    console.log(`\n[JobScraper] Discovery complete: ${allJobs.length} unique jobs found.`);
-    return allJobs;
-  }
-
-  // ─── Apply URL extraction ───────────────────────────────────────────────────
-
-  async extractApplyUrl(job) {
-    // Company-sourced jobs already have a direct apply URL
-    if (job.source === 'company') {
-      return job.url;
-    }
-
-    // Platform-sourced jobs need to navigate to the job page to find the external ATS link
-    const scraper = this.platformScrapers[job.source];
-    if (!scraper) return job.url || null;
-    try {
-      return await scraper.extractApplyUrl(job.url);
-    } catch (err) {
-      console.warn(`[JobScraper] Could not extract apply URL for ${job.url}: ${err.message}`);
-      return null;
-    }
-  }
-
-  _delay(ms) {
-    return new Promise(r => setTimeout(r, ms));
+    return this._filterNew(allJobs);
   }
 }
 
