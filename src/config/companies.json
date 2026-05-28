@@ -1,146 +1,145 @@
-{
-  "_readme": "Add your target companies here. The system will visit each company's careers page, search for matching job titles, and auto-apply. Set 'enabled: false' to skip a company temporarily.",
-  "companies": [
-    {
-      "name": "Google",
-      "enabled": true,
-      "careersUrl": "https://careers.google.com/jobs/results/",
-      "ats": "custom",
-      "searchParam": "q",
-      "notes": "Google uses its own ATS. Add Greenhouse/Lever URL in applyUrlPattern if known."
-    },
-    {
-      "name": "Microsoft",
-      "enabled": true,
-      "careersUrl": "https://jobs.microsoft.com/us/en/search",
-      "ats": "custom",
-      "searchParam": "q"
-    },
-    {
-      "name": "Amazon",
-      "enabled": true,
-      "careersUrl": "https://www.amazon.jobs/en/search",
-      "ats": "custom",
-      "searchParam": "query"
-    },
-    {
-      "name": "Meta",
-      "enabled": true,
-      "careersUrl": "https://www.metacareers.com/jobs",
-      "ats": "custom",
-      "searchParam": "q"
-    },
-    {
-      "name": "Apple",
-      "enabled": true,
-      "careersUrl": "https://jobs.apple.com/en-us/search",
-      "ats": "custom",
-      "searchParam": "search"
-    },
-    {
-      "name": "Netflix",
-      "enabled": true,
-      "careersUrl": "https://jobs.netflix.com/search",
-      "ats": "lever",
-      "searchParam": "q"
-    },
-    {
-      "name": "Salesforce",
-      "enabled": true,
-      "careersUrl": "https://careers.salesforce.com/en/jobs/",
-      "ats": "custom",
-      "searchParam": "keyword"
-    },
-    {
-      "name": "IBM",
-      "enabled": true,
-      "careersUrl": "https://www.ibm.com/employment/",
-      "ats": "custom",
-      "searchParam": "q"
-    },
-    {
-      "name": "Oracle",
-      "enabled": true,
-      "careersUrl": "https://careers.oracle.com/jobs/#en/sites/jobsearch/requisitions",
-      "ats": "workday",
-      "searchParam": "keyword"
-    },
-    {
-      "name": "Cisco",
-      "enabled": true,
-      "careersUrl": "https://jobs.cisco.com/jobs/SearchJobs",
-      "ats": "custom",
-      "searchParam": "keyword"
-    },
-    {
-      "name": "JPMorgan Chase",
-      "enabled": true,
-      "careersUrl": "https://careers.jpmorgan.com/us/en/jobs/search",
-      "ats": "custom",
-      "searchParam": "q"
-    },
-    {
-      "name": "Capital One",
-      "enabled": true,
-      "careersUrl": "https://www.capitalonecareers.com/search-jobs",
-      "ats": "custom",
-      "searchParam": "k"
-    },
-    {
-      "name": "Deloitte",
-      "enabled": true,
-      "careersUrl": "https://apply.deloitte.com/careers/SearchJobs",
-      "ats": "custom",
-      "searchParam": "keyword"
-    },
-    {
-      "name": "Accenture",
-      "enabled": true,
-      "careersUrl": "https://www.accenture.com/us-en/careers/jobsearch",
-      "ats": "custom",
-      "searchParam": "jk"
-    },
-    {
-      "name": "ServiceNow",
-      "enabled": true,
-      "careersUrl": "https://jobs.smartrecruiters.com/ServiceNow",
-      "ats": "greenhouse",
-      "searchParam": "search"
-    },
-    {
-      "name": "Workday",
-      "enabled": true,
-      "careersUrl": "https://www.workday.com/en-us/company/careers/open-positions.html",
-      "ats": "greenhouse",
-      "searchParam": "q"
-    },
-    {
-      "name": "Stripe",
-      "enabled": true,
-      "careersUrl": "https://stripe.com/jobs/search",
-      "ats": "greenhouse",
-      "searchParam": "q"
-    },
-    {
-      "name": "Atlassian",
-      "enabled": true,
-      "careersUrl": "https://www.atlassian.com/company/careers/all-jobs",
-      "ats": "greenhouse",
-      "searchParam": "search"
-    },
-    {
-      "name": "Twilio",
-      "enabled": true,
-      "careersUrl": "https://boards.greenhouse.io/twilio",
-      "ats": "greenhouse",
-      "searchParam": "q"
-    },
-    {
-      "name": "Datadog",
-      "enabled": true,
-      "careersUrl": "https://careers.datadoghq.com/",
-      "ats": "greenhouse",
-      "searchParam": "q"
-    }
-  ]
-}
+[
+  {
+    "name": "Stripe",
+    "domain": "stripe.com",
+    "careersUrl": "https://stripe.com/jobs/search",
+    "ats": "greenhouse",
+    "searchParam": "query",
+    "enabled": true
+  },
+  {
+    "name": "Airbnb",
+    "domain": "airbnb.com",
+    "careersUrl": "https://careers.airbnb.com/positions/",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "Shopify",
+    "domain": "shopify.com",
+    "careersUrl": "https://www.shopify.com/careers/search",
+    "ats": "greenhouse",
+    "searchParam": "keywords",
+    "enabled": true
+  },
+  {
+    "name": "Twilio",
+    "domain": "twilio.com",
+    "careersUrl": "https://boards.greenhouse.io/twilio",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "HashiCorp",
+    "domain": "hashicorp.com",
+    "careersUrl": "https://www.hashicorp.com/jobs",
+    "ats": "lever",
+    "enabled": true
+  },
+  {
+    "name": "Datadog",
+    "domain": "datadoghq.com",
+    "careersUrl": "https://www.datadoghq.com/careers/",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "Confluent",
+    "domain": "confluent.io",
+    "careersUrl": "https://www.confluent.io/careers/#open-roles",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "Elastic",
+    "domain": "elastic.co",
+    "careersUrl": "https://www.elastic.co/about/careers",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "MongoDB",
+    "domain": "mongodb.com",
+    "careersUrl": "https://www.mongodb.com/careers/jobs",
+    "ats": "greenhouse",
+    "searchParam": "text",
+    "enabled": true
+  },
+  {
+    "name": "PagerDuty",
+    "domain": "pagerduty.com",
+    "careersUrl": "https://www.pagerduty.com/careers/",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "Cloudflare",
+    "domain": "cloudflare.com",
+    "careersUrl": "https://www.cloudflare.com/careers/jobs/",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "Okta",
+    "domain": "okta.com",
+    "careersUrl": "https://www.okta.com/company/careers/",
+    "ats": "workday",
+    "enabled": true
+  },
+  {
+    "name": "Snowflake",
+    "domain": "snowflake.com",
+    "careersUrl": "https://careers.snowflake.com/us/en/search-results",
+    "ats": "workday",
+    "enabled": true
+  },
+  {
+    "name": "Databricks",
+    "domain": "databricks.com",
+    "careersUrl": "https://www.databricks.com/company/careers/open-positions",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "New Relic",
+    "domain": "newrelic.com",
+    "careersUrl": "https://newrelic.com/about/careers",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "Fastly",
+    "domain": "fastly.com",
+    "careersUrl": "https://www.fastly.com/about/careers",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "DigitalOcean",
+    "domain": "digitalocean.com",
+    "careersUrl": "https://www.digitalocean.com/careers",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "Figma",
+    "domain": "figma.com",
+    "careersUrl": "https://www.figma.com/careers/",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "Vercel",
+    "domain": "vercel.com",
+    "careersUrl": "https://vercel.com/careers",
+    "ats": "greenhouse",
+    "enabled": true
+  },
+  {
+    "name": "Supabase",
+    "domain": "supabase.com",
+    "careersUrl": "https://supabase.com/careers",
+    "ats": "generic",
+    "enabled": true
+  }
+]
